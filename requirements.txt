@@ -1,0 +1,4 @@
+Flask
+telethon
+gunicorn
+nest_asyncio
