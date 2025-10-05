@@ -5,6 +5,14 @@
 </head>
 <body>
     <h1>Telegram Scraper</h1>
+
+    <!-- Login with another account button -->
+    <p>
+        <a href="{{ url_for('auth.login') }}">
+            <button type="button">Login with another account</button>
+        </a>
+    </p>
+
     <form method="POST">
         <input type="text" name="channel_url" placeholder="Enter Telegram channel/post URL" required>
         <button type="submit">Fetch</button>
