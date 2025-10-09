@@ -1,0 +1,8 @@
+stage 1
+git add .
+
+stage 2
+git commit -m "Add initial Telegram Scraper code"
+
+stage 3
+git push origin main
