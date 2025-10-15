@@ -1,5 +1,5 @@
 from flask import Flask, render_template, request, send_file, url_for, redirect, session, Response, jsonify
-import os, queue, threading
+import os, queue, threading, tempfile
 from scraper import fetch_messages
 from auth import auth_bp
 from client_manager import run_async
@@ -7,6 +7,7 @@ from client_manager import run_async
 app = Flask(__name__)
 app.secret_key = "supersecret"
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = tempfile.gettempdir()
 
 # Register Blueprint
 app.register_blueprint(auth_bp, url_prefix="/auth")

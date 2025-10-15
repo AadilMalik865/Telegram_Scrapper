@@ -1,9 +1,10 @@
-import re, csv, os, datetime
+import re, csv, os, datetime, tempfile
 from telethon.tl.functions.channels import GetFullChannelRequest
 from telethon.tl.types import PeerChannel, DocumentAttributeAudio, MessageMediaDocument
 from client_manager import get_client
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = tempfile.gettempdir()
 
 def extract_channel_id_from_url(url):
     match = re.match(r'https://t.me/c/(\d+)/\d*', url)
