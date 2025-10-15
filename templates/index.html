@@ -1,61 +1,113 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Telegram Scraper</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Telegram Scraper</title>
+  <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-100 min-h-screen flex items-center justify-center py-10">
 
-    <div class="bg-white rounded-2xl shadow-xl p-10 w-full max-w-3xl">
-        <h1 class="text-3xl md:text-4xl font-bold text-center mb-8">📡 Telegram Scraper</h1>
+<div class="bg-white rounded-2xl shadow-2xl p-10 w-full max-w-3xl">
+  <h1 class="text-4xl font-extrabold text-center text-blue-600 mb-6">📡 Telegram Scraper</h1>
 
-        <div class="text-center mb-8">
-            <a href="{{ url_for('auth.login') }}">
-                <button class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-6 rounded-lg transition-all shadow">
-                    Login with another account
-                </button>
-            </a>
-        </div>
+  <div class="text-center mb-6">
+    <a href="{{ url_for('auth.login') }}">
+      <button class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-6 rounded-lg shadow">
+        🔄 Login with another account
+      </button>
+    </a>
+  </div>
 
-        <form method="POST" class="mb-8">
-            <label class="block text-lg font-medium mb-2">Enter multiple Telegram URLs (one per line):</label>
-            <textarea name="channel_urls" rows="6" 
-                class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"
-                placeholder="https://t.me/example_channel/12345" required></textarea>
-            <div class="text-center mt-4">
-                <button type="submit" 
-                    class="bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-6 rounded-lg transition-all shadow">
-                    Fetch
-                </button>
-            </div>
-        </form>
+  <form id="scrapeForm" method="POST" class="mb-8">
+    <label class="block text-lg font-semibold mb-2">Enter Telegram URLs (one per line):</label>
+    <textarea name="channel_urls" rows="6"
+      class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+      placeholder="https://t.me/example_channel/12345" required></textarea>
 
-        <h3 class="text-xl font-semibold mb-2">📡 Progress:</h3>
-        <div id="progressBox" 
-             class="border border-gray-300 p-4 h-64 overflow-y-scroll rounded-lg bg-gray-50 mb-6 scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-gray-200">
-        </div>
+    <div class="text-center mt-4 space-x-3">
+      <button type="submit"
+        class="bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-8 rounded-lg shadow">
+        🚀 Start Scraping
+      </button>
 
-        <script>
-            var source = new EventSource("{{ url_for('progress') }}");
-            source.onmessage = function(event) {
-                var box = document.getElementById("progressBox");
-                box.innerHTML += event.data + "<br>";
-                box.scrollTop = box.scrollHeight;
-            };
-        </script>
-
-        {% if file_exists %}
-            <div class="text-center mt-6">
-                <p class="text-green-600 font-semibold mb-4 text-lg">🎉 Scraping completed successfully! ✅</p>
-                <a href="{{ url_for('download', file_name=file_name) }}" 
-                   class="bg-purple-500 hover:bg-purple-600 text-white py-2 px-6 rounded-lg transition-all shadow inline-block">
-                    Download CSV
-                </a>
-            </div>
-        {% endif %}
+      <button type="button" id="stopBtn"
+        class="bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-8 rounded-lg shadow">
+        🛑 Stop
+      </button>
     </div>
+  </form>
 
+  <div>
+    <h3 class="text-xl font-semibold mb-2">📡 Live Progress:</h3>
+    <div id="progressBox"
+      class="border border-gray-300 p-4 h-64 overflow-y-scroll rounded-lg bg-gray-50 mb-4 text-sm font-mono leading-relaxed">
+      <p class="text-gray-400 text-center">Waiting for scraping to start...</p>
+    </div>
+  </div>
+
+  <div id="loader" class="hidden text-center mt-4">
+    <svg class="animate-spin h-8 w-8 mx-auto text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z"></path>
+    </svg>
+    <p class="text-gray-600 mt-2 font-medium">Processing your URLs... please wait</p>
+  </div>
+
+  <!-- Download button placeholder -->
+  <div id="downloadDiv" class="text-center mt-6"></div>
+</div>
+
+<script>
+var source = new EventSource("{{ url_for('progress') }}");
+source.onmessage = function (event) {
+    var box = document.getElementById("progressBox");
+    if (box.textContent.includes("Waiting")) box.innerHTML = "";
+    box.innerHTML += event.data + "<br>";
+    box.scrollTop = box.scrollHeight;
+
+    // Check file after scraping completes or stop
+    if (event.data.includes("Scraping completed") || event.data.includes("🛑 Scraping stopped")) {
+        checkDownload();
+    }
+};
+
+// Show loader while submitting
+document.getElementById("scrapeForm").addEventListener("submit", function() {
+    document.getElementById("loader").classList.remove("hidden");
+    document.getElementById("progressBox").innerHTML =
+        "<p class='text-blue-500'>Connecting to Telegram API...</p>";
+});
+
+// Stop button
+document.getElementById("stopBtn").addEventListener("click", function() {
+    fetch("/stop", { method: "POST" })
+      .then(() => {
+        const box = document.getElementById("progressBox");
+        box.innerHTML += "<br><span class='text-red-600 font-semibold'>🛑 Stop requested...</span><br>";
+        checkDownload(); // immediately check for CSV
+      });
+});
+
+// Check periodically if CSV exists
+function checkDownload() {
+    fetch("/check_file")
+        .then(res => res.json())
+        .then(data => {
+            if (data.exists) {
+                const downloadDiv = document.getElementById("downloadDiv");
+                downloadDiv.innerHTML = `
+                    <p class="text-green-600 font-semibold mb-3 text-lg">✅ CSV ready for download!</p>
+                    <a href="/download/${data.file_name}" 
+                       class="bg-purple-500 hover:bg-purple-600 text-white py-2 px-8 rounded-lg shadow">
+                       📥 Download CSV
+                    </a>`;
+                document.getElementById("loader").classList.add("hidden");
+            } else {
+                setTimeout(checkDownload, 2000);
+            }
+        });
+}
+</script>
 </body>
 </html>

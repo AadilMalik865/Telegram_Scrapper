@@ -19,7 +19,6 @@ def extract_channel_id_from_url(url):
 def clean_text(text):
     if not text:
         return "No title"
-    # ✅ Preserve emojis and Unicode
     return text.strip()
 
 def extract_channel_info_from_url(url):
@@ -42,7 +41,9 @@ def extract_channel_info_from_url(url):
 
     raise ValueError("Invalid URL format")
 
-async def fetch_messages(post_urls, phone, logger=print):
+
+# ✅ Updated function with stop_event
+async def fetch_messages(post_urls, phone, logger=print, stop_event=None):
     client = get_client(phone)
 
     file_name = "telegram_data.csv"
@@ -61,6 +62,10 @@ async def fetch_messages(post_urls, phone, logger=print):
         writer.writeheader()
 
         for url in post_urls:
+            if stop_event and stop_event.is_set():
+                logger("🛑 Stop signal received before processing new URL.")
+                return file_name
+
             try:
                 channel_identifier, msg_id, is_private = extract_channel_info_from_url(url)
 
@@ -85,11 +90,14 @@ async def fetch_messages(post_urls, phone, logger=print):
                     if message:
                         writer.writerow(process_message(message, channel_identifier, channel_url, channel_name, subscribers_count))
                         logger(f"✅ Saved post {msg_id} from {channel_name}")
-
                 else:
                     logger(f"➡️ Scraping channel/profile: {channel_name}")
                     count = 0
                     async for message in client.iter_messages(channel):
+                        if stop_event and stop_event.is_set():
+                            logger(f"🛑 Stop signal detected — stopping {channel_name}.")
+                            return file_name
+
                         writer.writerow(process_message(message, channel_identifier, channel_url, channel_name, subscribers_count))
                         count += 1
                         if count % 50 == 0:
@@ -100,6 +108,7 @@ async def fetch_messages(post_urls, phone, logger=print):
                 logger(f"❌ Error processing {url}: {e}")
 
     return file_name
+
 
 def process_message(message, channel_identifier, channel_url, channel_name, subscribers_count):
     clean_title = clean_text(message.text.split("\n")[0] if message.text else None)
