@@ -43,12 +43,20 @@ def extract_channel_info_from_url(url):
     raise ValueError("Invalid URL format")
 
 
-# ✅ Updated function with stop_event
+import csv
+import tempfile, os
+from telethon.tl.types import PeerChannel
+from telethon.tl.functions.channels import GetFullChannelRequest
+
+# ✅ Updated function with stop_event and file_path return
 async def fetch_messages(post_urls, phone, logger=print, stop_event=None):
     client = get_client(phone)
 
+    logger(f"📡 Started fetching for {len(post_urls)} URLs…")
+
+    # File setup
     file_name = "telegram_data.csv"
-    file_path = os.path.join(BASE_DIR, tempfile.gettempdir(), file_name)
+    file_path = os.path.join(tempfile.gettempdir(), file_name)
 
     fieldnames = [
         'channel_url', 'channel_name', 'subscribers_count',
@@ -65,7 +73,7 @@ async def fetch_messages(post_urls, phone, logger=print, stop_event=None):
         for url in post_urls:
             if stop_event and stop_event.is_set():
                 logger("🛑 Stop signal received before processing new URL.")
-                return file_name
+                return file_path  # ✅ return full path, not just name
 
             try:
                 channel_identifier, msg_id, is_private = extract_channel_info_from_url(url)
@@ -83,13 +91,21 @@ async def fetch_messages(post_urls, phone, logger=print, stop_event=None):
                 except Exception:
                     subscribers_count = "N/A"
 
-                channel_url = f"https://t.me/c/{channel_identifier}" if isinstance(channel_identifier, int) else f"https://t.me/{channel_identifier}"
+                channel_url = (
+                    f"https://t.me/c/{channel_identifier}"
+                    if isinstance(channel_identifier, int)
+                    else f"https://t.me/{channel_identifier}"
+                )
 
                 if msg_id:
                     logger(f"📌 Fetching single post from {url}")
                     message = await client.get_messages(channel, ids=msg_id)
                     if message:
-                        writer.writerow(process_message(message, channel_identifier, channel_url, channel_name, subscribers_count))
+                        writer.writerow(
+                            process_message(
+                                message, channel_identifier, channel_url, channel_name, subscribers_count
+                            )
+                        )
                         logger(f"✅ Saved post {msg_id} from {channel_name}")
                 else:
                     logger(f"➡️ Scraping channel/profile: {channel_name}")
@@ -97,18 +113,25 @@ async def fetch_messages(post_urls, phone, logger=print, stop_event=None):
                     async for message in client.iter_messages(channel):
                         if stop_event and stop_event.is_set():
                             logger(f"🛑 Stop signal detected — stopping {channel_name}.")
-                            return file_name
+                            return file_path  # ✅ return file_path here too
 
-                        writer.writerow(process_message(message, channel_identifier, channel_url, channel_name, subscribers_count))
+                        writer.writerow(
+                            process_message(
+                                message, channel_identifier, channel_url, channel_name, subscribers_count
+                            )
+                        )
                         count += 1
                         if count % 50 == 0:
                             logger(f"[{channel_name}] Fetched {count} messages...")
+
                     logger(f"✅ Done scraping {channel_name}")
 
             except Exception as e:
                 logger(f"❌ Error processing {url}: {e}")
+                logger(f"❌ Error processing {url}: {e.__class__.__name__} - {e}")
 
-    return file_name
+    # ✅ Return full path (not just filename)
+    return file_path
 
 
 def process_message(message, channel_identifier, channel_url, channel_name, subscribers_count):

@@ -6,7 +6,8 @@ from client_manager import run_async
 
 app = Flask(__name__)
 app.secret_key = "supersecret"
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# ✅ Always use /tmp for Render deployments
 BASE_DIR = tempfile.gettempdir()
 
 # Register Blueprint
@@ -17,12 +18,22 @@ log_queue = queue.Queue()
 stop_event = threading.Event()  # Stop scraper
 scraped_file = None             # Track completed CSV
 
+
+# ----------------------------------------------------------
+# Helper: push messages to SSE
+# ----------------------------------------------------------
 def log_message(msg):
+    print(msg, flush=True)  # log also to console (for debugging Render logs)
     log_queue.put(msg)
 
+
+# ----------------------------------------------------------
+# Routes
+# ----------------------------------------------------------
 @app.route("/")
 def home():
     return redirect(url_for("auth.login"))
+
 
 @app.route("/index", methods=["GET", "POST"])
 def index():
@@ -41,20 +52,34 @@ def index():
         urls_text = request.form.get("channel_urls")
         urls = [u.strip() for u in urls_text.splitlines() if u.strip()]
 
-        stop_event.clear()  # reset stop flag
-        scraped_file = None # reset file tracker
+        stop_event.clear()
+        scraped_file = None
 
-        # Background scraping
+        # Run background scraping
         def background_scrape():
             global scraped_file
             log_message("🚀 Scraping started in background...")
             try:
-                file_name = run_async(fetch_messages(urls, phone, log_message, stop_event))
-                scraped_file = file_name  # always assign so partial CSV exists
+                # ✅ Force /tmp output path
+                file_name = "scraped_data.csv"
+                output_path = os.path.join(BASE_DIR, file_name)
+
+                # Run your async scraper
+                result_file = run_async(fetch_messages(urls, phone, log_message, stop_event))
+
+                # Ensure saved in /tmp
+                if result_file and os.path.exists(result_file):
+                    scraped_file = result_file
+                elif os.path.exists(output_path):
+                    scraped_file = output_path
+                else:
+                    scraped_file = output_path  # fallback
+
                 if not stop_event.is_set():
                     log_message("✅ Scraping completed successfully.")
                 else:
                     log_message("🛑 Scraping stopped by user.")
+
             except Exception as e:
                 log_message(f"❌ Error during scraping: {e}")
 
@@ -64,47 +89,67 @@ def index():
 
     return render_template("index.html", file_exists=file_exists, file_name=scraped_file)
 
-# SSE endpoint for live logs
+
+# ----------------------------------------------------------
+# Server-Sent Events (SSE) – Live log updates
+# ----------------------------------------------------------
 @app.route("/progress")
 def progress():
     def generate():
         while True:
             msg = log_queue.get()
             yield f"data: {msg}\n\n"
+
+    # ✅ Disable buffering on Render
     return Response(
         generate(),
         mimetype="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",  # 🔥 Required for Render (disables buffering)
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",  # 🔥 Important for Render
         },
     )
 
+
+# ----------------------------------------------------------
 # Stop scraping
+# ----------------------------------------------------------
 @app.route("/stop", methods=["POST"])
 def stop_scraping():
     stop_event.set()
     log_message("🛑 Stop signal received — scraper will stop soon.")
     return jsonify({"status": "stopping"})
 
-# Download CSV
+
+# ----------------------------------------------------------
+# Check file existence
+# ----------------------------------------------------------
+@app.route("/check_file")
+def check_file():
+    global scraped_file
+    if scraped_file and os.path.exists(scraped_file):
+        return jsonify({
+            "exists": True,
+            "file_name": os.path.basename(scraped_file)
+        })
+    return jsonify({"exists": False})
+
+
+# ----------------------------------------------------------
+# File download
+# ----------------------------------------------------------
 @app.route("/download/<file_name>")
 def download(file_name):
-    full_path = os.path.join(tempfile.gettempdir(), file_name)
+    full_path = os.path.join(BASE_DIR, file_name)
     if os.path.exists(full_path):
         return send_file(full_path, as_attachment=True)
     return "File not found!", 404
 
 
-# Check if file exists (used by frontend)
-@app.route("/check_file")
-def check_file():
-    global scraped_file
-    if scraped_file and os.path.exists(scraped_file):
-        file_name = os.path.basename(scraped_file)
-        return jsonify({"exists": True, "file_name": file_name})
-    return jsonify({"exists": False})
-
+# ----------------------------------------------------------
+# Start app
+# ----------------------------------------------------------
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=False, threaded=True)
+    app.run(host="0.0.0.0", port=port, debug=True, threaded=True)
