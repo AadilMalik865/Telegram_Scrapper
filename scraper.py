@@ -48,7 +48,7 @@ async def fetch_messages(post_urls, phone, logger=print, stop_event=None):
     client = get_client(phone)
 
     file_name = "telegram_data.csv"
-    file_path = os.path.join(BASE_DIR, file_name)
+    file_path = os.path.join(BASE_DIR, tempfile.gettempdir(), file_name)
 
     fieldnames = [
         'channel_url', 'channel_name', 'subscribers_count',

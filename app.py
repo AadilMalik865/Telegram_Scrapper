@@ -71,7 +71,14 @@ def progress():
         while True:
             msg = log_queue.get()
             yield f"data: {msg}\n\n"
-    return Response(generate(), mimetype="text/event-stream")
+    return Response(
+        generate(),
+        mimetype="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",  # 🔥 Required for Render (disables buffering)
+        },
+    )
 
 # Stop scraping
 @app.route("/stop", methods=["POST"])
@@ -83,18 +90,19 @@ def stop_scraping():
 # Download CSV
 @app.route("/download/<file_name>")
 def download(file_name):
-    full_path = os.path.join(BASE_DIR, file_name)
+    full_path = os.path.join(tempfile.gettempdir(), file_name)
     if os.path.exists(full_path):
         return send_file(full_path, as_attachment=True)
-    else:
-        return "File not found!", 404
+    return "File not found!", 404
+
 
 # Check if file exists (used by frontend)
 @app.route("/check_file")
 def check_file():
     global scraped_file
     if scraped_file and os.path.exists(scraped_file):
-        return jsonify({"exists": True, "file_name": scraped_file})
+        file_name = os.path.basename(scraped_file)
+        return jsonify({"exists": True, "file_name": file_name})
     return jsonify({"exists": False})
 
 if __name__ == "__main__":
