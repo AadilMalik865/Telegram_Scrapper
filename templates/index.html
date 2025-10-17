@@ -35,6 +35,12 @@
         class="bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-8 rounded-lg shadow">
         🛑 Stop
       </button>
+
+      <a href="/download/telegram_data.csv" 
+        id="downloadBtn"
+        class="bg-purple-600 hover:bg-purple-700 text-white font-semibold py-2 px-8 rounded-lg shadow">
+        📥 Download Latest Data
+      </a>
     </div>
   </form>
 
@@ -54,8 +60,6 @@
     <p class="text-gray-600 mt-2 font-medium">Processing your URLs... please wait</p>
   </div>
 
-  <!-- Download button placeholder -->
-  <div id="downloadDiv" class="text-center mt-6"></div>
 </div>
 
 <script>
@@ -65,11 +69,6 @@ source.onmessage = function (event) {
     if (box.textContent.includes("Waiting")) box.innerHTML = "";
     box.innerHTML += event.data + "<br>";
     box.scrollTop = box.scrollHeight;
-
-    // Check file after scraping completes or stop
-    if (event.data.includes("Scraping completed") || event.data.includes("🛑 Scraping stopped")) {
-        checkDownload();
-    }
 };
 
 // Show loader while submitting
@@ -85,29 +84,9 @@ document.getElementById("stopBtn").addEventListener("click", function() {
       .then(() => {
         const box = document.getElementById("progressBox");
         box.innerHTML += "<br><span class='text-red-600 font-semibold'>🛑 Stop requested...</span><br>";
-        checkDownload(); // immediately check for CSV
       });
 });
-
-// Check periodically if CSV exists
-function checkDownload() {
-    fetch("/check_file")
-        .then(res => res.json())
-        .then(data => {
-            if (data.exists) {
-                const downloadDiv = document.getElementById("downloadDiv");
-                downloadDiv.innerHTML = `
-                    <p class="text-green-600 font-semibold mb-3 text-lg">✅ CSV ready for download!</p>
-                    <a href="/download/${data.file_name}" 
-                       class="bg-purple-500 hover:bg-purple-600 text-white py-2 px-8 rounded-lg shadow">
-                       📥 Download CSV
-                    </a>`;
-                document.getElementById("loader").classList.add("hidden");
-            } else {
-                setTimeout(checkDownload, 2000);
-            }
-        });
-}
 </script>
+
 </body>
 </html>

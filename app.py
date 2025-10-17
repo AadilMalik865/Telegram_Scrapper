@@ -128,12 +128,23 @@ def stop_scraping():
 @app.route("/check_file")
 def check_file():
     global scraped_file
+    temp_path = os.path.join(BASE_DIR, "telegram_data.csv")
+
+    # ✅ Fallback to telegram_data.csv in /tmp
     if scraped_file and os.path.exists(scraped_file):
+        file_path = scraped_file
+    elif os.path.exists(temp_path):
+        file_path = temp_path
+    else:
+        file_path = None
+
+    if file_path:
         return jsonify({
             "exists": True,
-            "file_name": os.path.basename(scraped_file)
+            "file_name": os.path.basename(file_path)
         })
     return jsonify({"exists": False})
+
 
 
 # ----------------------------------------------------------
